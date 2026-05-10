@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Details - SecureFile</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background: #f5f6fa; min-height: 100vh; }
+        .card { border-radius: 10px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        .cert-field { font-family: monospace; font-size: 0.85rem; word-break: break-all; background: #f8f9fa; padding: 8px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="bi bi-shield-lock"></i> SecureFile</a>
+            <a href="{{ url_for('user_dashboard') }}" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-award text-primary fs-3 me-3"></i>
+                            <div>
+                                <h4 class="mb-0">X.509 Certificate</h4>
+                                <small class="text-muted">Certificate ID: {{ cert.id }}</small>
+                            </div>
+                            <div class="ms-auto">
+                                {% if verification.valid %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Valid</span>
+                                {% else %}
+                                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Invalid</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Subject</label>
+                                <div class="cert-field">{{ cert_details.subject }}</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Issuer</label>
+                                <div class="cert-field">{{ cert_details.issuer }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Serial Number</label>
+                                <div class="cert-field">{{ cert_details.serial_number }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Signature Algorithm</label>
+                                <div class="cert-field">{{ cert_details.signature_algorithm }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Valid From</label>
+                                <div class="cert-field">{{ cert_details.not_valid_before }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Valid Until</label>
+                                <div class="cert-field">{{ cert_details.not_valid_after }}</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-bold">SHA-256 Fingerprint</label>
+                                <div class="cert-field">{{ cert_details.fingerprint_sha256 }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Public Key Algorithm</label>
+                                <div class="cert-field">{{ cert_details.public_key_algorithm }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Status</label>
+                                <div>
+                                    {% if cert.status == 'active' %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% elif cert.status == 'revoked' %}
+                                    <span class="badge bg-danger">Revoked on {{ cert.revoked_at }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Expired</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('certificate_download', cert_id=cert.id) }}" class="btn btn-primary">
+                                <i class="bi bi-download"></i> Download Certificate (PEM)
+                            </a>
+                            {% if cert.status == 'active' %}
+                            <form action="{{ url_for('certificate_revoke', cert_id=cert.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to revoke this certificate? This action cannot be undone.');">
+                                <button type="submit" class="btn btn-danger">
+                                    <i class="bi bi-x-circle"></i> Revoke Certificate
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

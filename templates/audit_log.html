@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Log - SecureFile</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background: #f5f6fa; min-height: 100vh; }
+        .card { border-radius: 10px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="bi bi-shield-lock"></i> SecureFile</a>
+            <a href="{{ url_for('user_dashboard') }}" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-journal-text text-primary"></i> Audit Log</h5>
+            </div>
+            <div class="card-body">
+                {% if logs %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Action</th>
+                                <th>Resource</th>
+                                <th>Details</th>
+                                <th>IP Address</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td class="small">{{ log.created_at }}</td>
+                                <td>
+                                    {% if 'LOGIN' in log.action %}
+                                    <span class="badge bg-info">{{ log.action }}</span>
+                                    {% elif 'ENCRYPT' in log.action %}
+                                    <span class="badge bg-success">{{ log.action }}</span>
+                                    {% elif 'DECRYPT' in log.action %}
+                                    <span class="badge bg-warning text-dark">{{ log.action }}</span>
+                                    {% elif 'REVOKE' in log.action %}
+                                    <span class="badge bg-danger">{{ log.action }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ log.action }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small">{{ log.resource_type or '-' }}</td>
+                                <td class="small">{{ log.details or '-' }}</td>
+                                <td class="small">{{ log.ip_address or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">No audit log entries found.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

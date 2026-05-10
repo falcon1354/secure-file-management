@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure File Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; }
+        .card { background: rgba(255,255,255,0.95); border-radius: 15px; }
+        .feature-icon { font-size: 2.5rem; color: #0d6efd; }
+        .hero-title { color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-shield-lock"></i> SecureFile
+            </a>
+            <div class="navbar-nav ms-auto">
+                {% if session.get('user_id') %}
+                <a class="nav-link" href="{{ url_for('user_dashboard') }}">
+                    <i class="bi bi-person-circle"></i> {{ session.get('user_name', 'Dashboard') }}
+                </a>
+                <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                {% else %}
+                <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="text-center mb-5">
+            <h1 class="hero-title display-4 fw-bold">Secure File Management</h1>
+            <p class="text-light fs-5">AES-256 Encryption • RSA Key Wrapping • SHA-256 Integrity • PKI Digital Signatures</p>
+        </div>
+
+        <div class="row g-4 mb-5">
+            <div class="col-md-3">
+                <div class="card h-100 text-center p-4">
+                    <i class="bi bi-hash feature-icon"></i>
+                    <h5 class="mt-3">SHA-256 Hash</h5>
+                    <p class="text-muted small">Verify file integrity with cryptographic hashing</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100 text-center p-4">
+                    <i class="bi bi-lock feature-icon"></i>
+                    <h5 class="mt-3">AES-256</h5>
+                    <p class="text-muted small">Military-grade symmetric encryption</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100 text-center p-4">
+                    <i class="bi bi-key feature-icon"></i>
+                    <h5 class="mt-3">RSA-2048</h5>
+                    <p class="text-muted small">Asymmetric key protection</p>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card h-100 text-center p-4">
+                    <i class="bi bi-award feature-icon"></i>
+                    <h5 class="mt-3">PKI</h5>
+                    <p class="text-muted small">Digital certificates & signatures</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="card shadow-lg">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0"><i class="bi bi-cloud-upload"></i> Upload & Process File</h4>
+                    </div>
+                    <div class="card-body p-4">
+                        <form action="{{ url_for('upload_file') }}" method="POST" enctype="multipart/form-data">
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Select File</label>
+                                <input type="file" name="file" class="form-control form-control-lg" required>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">Action</label>
+                                <div class="d-flex gap-4">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="action" id="encrypt" value="encrypt" checked>
+                                        <label class="form-check-label" for="encrypt">
+                                            <i class="bi bi-lock text-success"></i> Encrypt
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="action" id="decrypt" value="decrypt">
+                                        <label class="form-check-label" for="decrypt">
+                                            <i class="bi bi-unlock text-warning"></i> Decrypt
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-arrow-right-circle"></i> Process File
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Workflow Diagram -->
+                <div class="card mt-4">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Security Workflow</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6 class="text-success"><i class="bi bi-lock"></i> Encryption Flow:</h6>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3 small">
+                            <span class="badge bg-primary">Upload</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-info">SHA-256 Hash</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-success">AES Encrypt</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-warning text-dark">RSA Wrap Key</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-danger">Sign</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-secondary">Store</span>
+                        </div>
+
+                        <h6 class="text-warning"><i class="bi bi-unlock"></i> Decryption Flow:</h6>
+                        <div class="d-flex flex-wrap align-items-center gap-2 small">
+                            <span class="badge bg-secondary">Load</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-warning text-dark">RSA Unwrap Key</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-success">AES Decrypt</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-danger">Verify Signature</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-info">Verify Hash</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span class="badge bg-primary">Download</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

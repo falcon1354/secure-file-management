@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - SecureFile</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; }
+        .card { border-radius: 15px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="bi bi-shield-lock"></i> SecureFile</a>
+        </div>
+    </nav>
+
+    <div class="container py-5">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <div class="card shadow-lg">
+                    <div class="card-header bg-primary text-white text-center">
+                        <h4 class="mb-0"><i class="bi bi-person-plus"></i> Register & Get Certificate</h4>
+                    </div>
+                    <div class="card-body p-4">
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" name="name" class="form-control" required placeholder="John Doe">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email Address</label>
+                                <input type="email" name="email" class="form-control" required placeholder="john@example.com">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Password</label>
+                                <input type="password" name="password" class="form-control" required minlength="6">
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label">Organization (Optional)</label>
+                                <input type="text" name="organization" class="form-control" placeholder="Your Company">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-award"></i> Register & Generate Certificate
+                            </button>
+                        </form>
+
+                        <hr class="my-4">
+
+                        <p class="text-center text-muted mb-0">
+                            Already have an account? <a href="{{ url_for('login') }}">Login here</a>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h6><i class="bi bi-info-circle text-info"></i> What happens when you register?</h6>
+                        <ul class="small text-muted mb-0">
+                            <li>A new user account is created</li>
+                            <li>An X.509 digital certificate is generated for you</li>
+                            <li>The certificate is signed by our Certificate Authority (CA)</li>
+                            <li>You can use this certificate to digitally sign your encrypted files</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

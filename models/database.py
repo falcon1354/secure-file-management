@@ -4,6 +4,7 @@ Uses MySQL to store certificates, users, and file metadata
 """
 import mysql.connector
 from mysql.connector import Error
+import sqlite3
 import os
 from datetime import datetime
 
@@ -21,17 +22,23 @@ class DatabaseModel:
 
     def connect(self):
         """Establish database connection"""
+        self.use_sqlite = os.environ.get('USE_SQLITE', 'true').lower() == 'true'
         try:
-            self.connection = mysql.connector.connect(**self.config)
-            if self.connection.is_connected():
+            if self.use_sqlite:
+                self.connection = sqlite3.connect('secure_file.db', check_same_thread=False)
+                # SQLite doesn't have is_connected(), it just works if connect didn't raise
                 return True
-        except Error as e:
+            else:
+                self.connection = mysql.connector.connect(**self.config)
+                if self.connection.is_connected():
+                    return True
+        except Exception as e:
             print(f"Database connection error: {e}")
             return False
 
     def disconnect(self):
         """Close database connection"""
-        if self.connection and self.connection.is_connected():
+        if self.connection:
             self.connection.close()
 
     def initialize_database(self):
@@ -40,84 +47,138 @@ class DatabaseModel:
             return False
 
         cursor = self.connection.cursor()
+        
+        # SQL for SQLite vs MySQL
+        if self.use_sqlite:
+            queries = [
+                """CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )""",
+                """CREATE TABLE IF NOT EXISTS certificates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT NOT NULL,
+                    serial_number VARCHAR(255) UNIQUE NOT NULL,
+                    fingerprint VARCHAR(255) NOT NULL,
+                    subject VARCHAR(512) NOT NULL,
+                    issuer VARCHAR(512) NOT NULL,
+                    not_valid_before DATETIME NOT NULL,
+                    not_valid_after DATETIME NOT NULL,
+                    cert_path VARCHAR(512) NOT NULL,
+                    key_path VARCHAR(512) NOT NULL,
+                    status TEXT DEFAULT 'active',
+                    revoked_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS encrypted_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT NOT NULL,
+                    original_filename VARCHAR(255) NOT NULL,
+                    encrypted_filename VARCHAR(255) NOT NULL,
+                    original_hash VARCHAR(64) NOT NULL,
+                    encrypted_hash VARCHAR(64) NOT NULL,
+                    file_size BIGINT NOT NULL,
+                    encryption_algorithm VARCHAR(50) DEFAULT 'AES-256-CFB',
+                    signature BLOB NULL,
+                    certificate_id INT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (certificate_id) REFERENCES certificates(id) ON DELETE SET NULL
+                )""",
+                """CREATE TABLE IF NOT EXISTS certificate_revocations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    certificate_id INT NOT NULL,
+                    serial_number VARCHAR(255) NOT NULL,
+                    revocation_reason VARCHAR(255),
+                    revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (certificate_id) REFERENCES certificates(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INT,
+                    action VARCHAR(100) NOT NULL,
+                    resource_type VARCHAR(50),
+                    resource_id INT,
+                    details TEXT,
+                    ip_address VARCHAR(45),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                )"""
+            ]
+        else:
+            queries = [
+                """CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                )""",
+                """CREATE TABLE IF NOT EXISTS certificates (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    serial_number VARCHAR(255) UNIQUE NOT NULL,
+                    fingerprint VARCHAR(255) NOT NULL,
+                    subject VARCHAR(512) NOT NULL,
+                    issuer VARCHAR(512) NOT NULL,
+                    not_valid_before DATETIME NOT NULL,
+                    not_valid_after DATETIME NOT NULL,
+                    cert_path VARCHAR(512) NOT NULL,
+                    key_path VARCHAR(512) NOT NULL,
+                    status ENUM('active', 'revoked', 'expired') DEFAULT 'active',
+                    revoked_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS encrypted_files (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    original_filename VARCHAR(255) NOT NULL,
+                    encrypted_filename VARCHAR(255) NOT NULL,
+                    original_hash VARCHAR(64) NOT NULL,
+                    encrypted_hash VARCHAR(64) NOT NULL,
+                    file_size BIGINT NOT NULL,
+                    encryption_algorithm VARCHAR(50) DEFAULT 'AES-256-CFB',
+                    signature BLOB NULL,
+                    certificate_id INT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (certificate_id) REFERENCES certificates(id) ON DELETE SET NULL
+                )""",
+                """CREATE TABLE IF NOT EXISTS certificate_revocations (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    certificate_id INT NOT NULL,
+                    serial_number VARCHAR(255) NOT NULL,
+                    revocation_reason VARCHAR(255),
+                    revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (certificate_id) REFERENCES certificates(id) ON DELETE CASCADE
+                )""",
+                """CREATE TABLE IF NOT EXISTS audit_log (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT,
+                    action VARCHAR(100) NOT NULL,
+                    resource_type VARCHAR(50),
+                    resource_id INT,
+                    details TEXT,
+                    ip_address VARCHAR(45),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+                )"""
+            ]
 
-        # Users table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                email VARCHAR(255) UNIQUE NOT NULL,
-                name VARCHAR(255) NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            )
-        """)
+        for query in queries:
+            cursor.execute(query)
 
-        # Certificates table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS certificates (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                serial_number VARCHAR(255) UNIQUE NOT NULL,
-                fingerprint VARCHAR(255) NOT NULL,
-                subject VARCHAR(512) NOT NULL,
-                issuer VARCHAR(512) NOT NULL,
-                not_valid_before DATETIME NOT NULL,
-                not_valid_after DATETIME NOT NULL,
-                cert_path VARCHAR(512) NOT NULL,
-                key_path VARCHAR(512) NOT NULL,
-                status ENUM('active', 'revoked', 'expired') DEFAULT 'active',
-                revoked_at TIMESTAMP NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        """)
-
-        # Files table (for tracking encrypted files with hashes)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS encrypted_files (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                original_filename VARCHAR(255) NOT NULL,
-                encrypted_filename VARCHAR(255) NOT NULL,
-                original_hash VARCHAR(64) NOT NULL,
-                encrypted_hash VARCHAR(64) NOT NULL,
-                file_size BIGINT NOT NULL,
-                encryption_algorithm VARCHAR(50) DEFAULT 'AES-256-CFB',
-                signature BLOB NULL,
-                certificate_id INT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (certificate_id) REFERENCES certificates(id) ON DELETE SET NULL
-            )
-        """)
-
-        # Certificate Revocation List (CRL)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS certificate_revocations (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                certificate_id INT NOT NULL,
-                serial_number VARCHAR(255) NOT NULL,
-                revocation_reason VARCHAR(255),
-                revoked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (certificate_id) REFERENCES certificates(id) ON DELETE CASCADE
-            )
-        """)
-
-        # Audit log for tracking all operations
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS audit_log (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT,
-                action VARCHAR(100) NOT NULL,
-                resource_type VARCHAR(50),
-                resource_id INT,
-                details TEXT,
-                ip_address VARCHAR(45),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-            )
-        """)
+        self.connection.commit()
+        cursor.close()
+        self.disconnect()
+        return True
 
         self.connection.commit()
         cursor.close()
@@ -132,8 +193,16 @@ class DatabaseModel:
             return None
 
         cursor = self.connection.cursor()
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
         try:
-            cursor.execute(
+            execute_query(
                 "INSERT INTO users (email, name, password_hash) VALUES (%s, %s, %s)",
                 (email, name, password_hash)
             )
@@ -152,8 +221,23 @@ class DatabaseModel:
         if not self.connect():
             return None
 
-        cursor = self.connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query("SELECT * FROM users WHERE email = %s", (email,))
         user = cursor.fetchone()
         cursor.close()
         self.disconnect()
@@ -164,8 +248,23 @@ class DatabaseModel:
         if not self.connect():
             return None
 
-        cursor = self.connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query("SELECT * FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         cursor.close()
         self.disconnect()
@@ -179,8 +278,16 @@ class DatabaseModel:
             return None
 
         cursor = self.connection.cursor()
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
         try:
-            cursor.execute("""
+            execute_query("""
                 INSERT INTO certificates 
                 (user_id, serial_number, fingerprint, subject, issuer, 
                  not_valid_before, not_valid_after, cert_path, key_path)
@@ -210,8 +317,23 @@ class DatabaseModel:
         if not self.connect():
             return []
 
-        cursor = self.connection.cursor(dictionary=True)
-        cursor.execute(
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query(
             "SELECT * FROM certificates WHERE user_id = %s ORDER BY created_at DESC",
             (user_id,)
         )
@@ -225,8 +347,23 @@ class DatabaseModel:
         if not self.connect():
             return None
 
-        cursor = self.connection.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM certificates WHERE id = %s", (cert_id,))
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query("SELECT * FROM certificates WHERE id = %s", (cert_id,))
         cert = cursor.fetchone()
         cursor.close()
         self.disconnect()
@@ -237,8 +374,23 @@ class DatabaseModel:
         if not self.connect():
             return None
 
-        cursor = self.connection.cursor(dictionary=True)
-        cursor.execute("""
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query("""
             SELECT * FROM certificates 
             WHERE user_id = %s AND status = 'active' AND not_valid_after > NOW()
             ORDER BY created_at DESC LIMIT 1
@@ -254,20 +406,28 @@ class DatabaseModel:
             return False
 
         cursor = self.connection.cursor()
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
         try:
             # Update certificate status
-            cursor.execute(
+            execute_query(
                 "UPDATE certificates SET status = 'revoked', revoked_at = NOW() WHERE id = %s",
                 (cert_id,)
             )
 
             # Get serial number
-            cursor.execute("SELECT serial_number FROM certificates WHERE id = %s", (cert_id,))
+            execute_query("SELECT serial_number FROM certificates WHERE id = %s", (cert_id,))
             result = cursor.fetchone()
 
             # Add to CRL
             if result:
-                cursor.execute("""
+                execute_query("""
                     INSERT INTO certificate_revocations (certificate_id, serial_number, revocation_reason)
                     VALUES (%s, %s, %s)
                 """, (cert_id, result[0], reason))
@@ -287,7 +447,15 @@ class DatabaseModel:
             return True  # Fail safe
 
         cursor = self.connection.cursor()
-        cursor.execute(
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query(
             "SELECT id FROM certificate_revocations WHERE serial_number = %s",
             (serial_number,)
         )
@@ -304,8 +472,16 @@ class DatabaseModel:
             return None
 
         cursor = self.connection.cursor()
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
         try:
-            cursor.execute("""
+            execute_query("""
                 INSERT INTO encrypted_files 
                 (user_id, original_filename, encrypted_filename, original_hash, 
                  encrypted_hash, file_size, signature, certificate_id)
@@ -334,8 +510,23 @@ class DatabaseModel:
         if not self.connect():
             return []
 
-        cursor = self.connection.cursor(dictionary=True)
-        cursor.execute(
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query(
             "SELECT * FROM encrypted_files WHERE user_id = %s ORDER BY created_at DESC",
             (user_id,)
         )
@@ -349,8 +540,23 @@ class DatabaseModel:
         if not self.connect():
             return None
 
-        cursor = self.connection.cursor(dictionary=True)
-        cursor.execute(
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
+        execute_query(
             "SELECT * FROM encrypted_files WHERE encrypted_filename = %s",
             (encrypted_filename,)
         )
@@ -368,8 +574,16 @@ class DatabaseModel:
             return
 
         cursor = self.connection.cursor()
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
         try:
-            cursor.execute("""
+            execute_query("""
                 INSERT INTO audit_log (user_id, action, resource_type, resource_id, details, ip_address)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (user_id, action, resource_type, resource_id, details, ip_address))
@@ -385,14 +599,29 @@ class DatabaseModel:
         if not self.connect():
             return []
 
-        cursor = self.connection.cursor(dictionary=True)
+        if self.use_sqlite:
+            # SQLite doesn't support dictionary=True in constructor, 
+            # we need to set row_factory or handle manually.
+            # For simplicity, we'll use a helper to make it act like dictionary cursor
+            self.connection.row_factory = sqlite3.Row
+            cursor = self.connection.cursor()
+        else:
+            cursor = self.connection.cursor(dictionary=True)
+        def execute_query(query, params=None):
+            if self.use_sqlite:
+                query = query.replace('%s', '?')
+            if params:
+                return cursor.execute(query, params)
+            else:
+                return cursor.execute(query)
+
         if user_id:
-            cursor.execute(
+            execute_query(
                 "SELECT * FROM audit_log WHERE user_id = %s ORDER BY created_at DESC LIMIT %s",
                 (user_id, limit)
             )
         else:
-            cursor.execute(
+            execute_query(
                 "SELECT * FROM audit_log ORDER BY created_at DESC LIMIT %s",
                 (limit,)
             )

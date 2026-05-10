@@ -100,7 +100,7 @@ def login_user():
                       f"User logged in: {email}", request.remote_addr)
 
         flash(f"Welcome back, {user['name']}!", "success")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("user_dashboard"))
 
     return render_template("login.html")
 
@@ -144,7 +144,7 @@ def view_certificate(cert_id):
     cert = db.get_certificate_by_id(cert_id)
     if not cert:
         flash("Certificate not found", "error")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("user_dashboard"))
 
     # Get detailed info from PKI model
     try:
@@ -152,7 +152,7 @@ def view_certificate(cert_id):
         verification = pki_model.verify_certificate(cert['cert_path'])
     except Exception as e:
         flash(f"Error reading certificate: {e}", "error")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("user_dashboard"))
 
     return render_template(
         "certificate_detail.html",
@@ -171,7 +171,7 @@ def download_certificate(cert_id):
     cert = db.get_certificate_by_id(cert_id)
     if not cert or cert['user_id'] != session['user_id']:
         flash("Certificate not found or access denied", "error")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("user_dashboard"))
 
     return send_file(cert['cert_path'], as_attachment=True,
                      download_name=f"certificate_{cert_id}.pem")
@@ -186,7 +186,7 @@ def revoke_certificate(cert_id):
     cert = db.get_certificate_by_id(cert_id)
     if not cert or cert['user_id'] != session['user_id']:
         flash("Certificate not found or access denied", "error")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("user_dashboard"))
 
     reason = request.form.get("reason", "User requested revocation")
     if db.revoke_certificate(cert_id, reason):
@@ -196,7 +196,7 @@ def revoke_certificate(cert_id):
     else:
         flash("Failed to revoke certificate", "error")
 
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("user_dashboard"))
 
 
 def generate_new_certificate():
@@ -223,7 +223,7 @@ def generate_new_certificate():
                   "New certificate generated", request.remote_addr)
 
     flash("New certificate generated successfully!", "success")
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("user_dashboard"))
 
 
 def view_ca_certificate():
